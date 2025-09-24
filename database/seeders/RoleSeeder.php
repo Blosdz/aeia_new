@@ -12,9 +12,10 @@ class RoleSeeder extends Seeder
         $roles = [
             ['name' => 'admin', 'description' => 'Administrador del sistema'],
             ['name' => 'client', 'description' => 'Cliente o inversor'],
-            ['name' => 'staff', 'description' => 'Empleado del sistema (comisiones internas)'],
-            ['name' => 'support', 'description' => 'Soporte técnico'],
-            ['name' => 'supervisor', 'description' => 'Supervisor de operaciones'],
+            ['name' => 'staff', 'description' => 'Empleado del sistema (comisiones internas)'], //leads suscriptor
+            ['name' => 'support', 'description' => 'Soporte técnico'], // Verificador
+            ['name' => 'supervisor', 'description' => 'Supervisor de operaciones'], //gestor comercial 
+            ['name' => 'client_business', 'description' => 'Cliente business'], 
         ];
 
         foreach ($roles as $role) {

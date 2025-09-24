@@ -11,33 +11,39 @@ return new class extends Migration
      */
     public function up(): void
     {
+
         Schema::create('plan_types', function (Blueprint $table) {
-            $table->bigIncrements('id');
+            $table->id();
             $table->enum('category', ['investment','coverage']);
             $table->string('name', 100);
-            $table->decimal('amount_min', 12,2);
-            $table->decimal('amount_max', 12,2);
+            $table->decimal('amount_min', 14, 2);
+            $table->decimal('amount_max', 14, 2);
             $table->string('img_url')->nullable();
             $table->enum('periodicity',['monthly','annual'])->default('monthly');
+            $table->unique(['category','name']);
         });
 
+
+
         Schema::create('funds', function (Blueprint $table) {
-            $table->bigIncrements('id');
-            $table->foreignId('plan_type_id')->constrained('plan_types')->onDelete('cascade');
+            $table->id();
+            $table->enum('category', ['investment','coverage']);
             $table->string('name', 100);
             $table->decimal('initial_amount',14,2);
             $table->decimal('current_amount',14,2);
             $table->json('metadata')->nullable();
             $table->enum('status', ['open','closed','paused'])->default('open');
             $table->timestamps();
+            $table->unique(['category','name']);
         });
 
         Schema::create('fund_histories', function (Blueprint $table) {
-            $table->bigIncrements('id');
+            $table->id();
             $table->foreignId('fund_id')->constrained('funds')->onDelete('cascade');
-            $table->decimal('fluctuation_percent',6,4);
+            $table->decimal('fluctuation_percent', 9, 4);
             $table->timestamp('recorded_at')->useCurrent();
             $table->json('metadata')->nullable();
+            $table->index(['fund_id','recorded_at']); 
         });
     }
 

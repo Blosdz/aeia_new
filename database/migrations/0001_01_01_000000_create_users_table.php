@@ -11,6 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // users that register
         Schema::create('users', function (Blueprint $table) {
             $table->id();
             $table->string('name');
@@ -27,6 +28,19 @@ return new class extends Migration
             $table->timestamp('created_at')->nullable();
         });
 
+        // users that do not register are marked as leads 
+        Schema::create('leads',function(Blueprint $table){
+            $table->id();
+            $table->string('name');
+            $table->string('lastname');
+            $table->string('email')->nullable();
+            $table->string('url_payment')->nullable();
+            $table->date('birthdate')->nullable();
+            $table->string('email_verification')->nullable();
+            $table->string('unique_code',50)->nullable()->index();
+            $table->timestamps();
+        });
+
         Schema::create('sessions', function (Blueprint $table) {
             $table->string('id')->primary();
             $table->foreignId('user_id')->nullable()->index();
@@ -35,6 +49,8 @@ return new class extends Migration
             $table->longText('payload');
             $table->integer('last_activity')->index();
         });
+
+
     }
 
     /**

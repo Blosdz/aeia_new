@@ -11,13 +11,6 @@ return new class extends Migration
      */
     public function up(): void
     {
-        //
-        Schema::table('users', function (Blueprint $table) {
-            $table->string('img_usuario')->nullable();
-            $table->string('unique_code', 50)->nullable()->index();
-            $table->timestamp('last_login')->nullable();
-            $table->boolean('is_active')->default(true);
-        });
 
 
 

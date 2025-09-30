@@ -37,18 +37,13 @@ return new class extends Migration
             $table->unique(['profile_id','client_account_id']);
         });
 
-        Schema::create('user_leads',function(Blueprint $table){
-            $table->id();
-            $table->foreignId('lead_id')->constrained('leads')->cascadeOnDelete();
-            $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
-            $table->string('status')->nullable();
-            $table->timestamps();
-        });
 
+        //para leads
         Schema::create('quotation',function(Blueprint $table){
             $table->id();
             $table->foreignId('lead_id')->constrained('leads')->onDelete('cascade');
             $table->string('transaction_id',100)->unique();
+            $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
             $table->char('currency',3);
             $table->enum('status',['pending','completed','failed','refunded'])->default('pending');
             $table->foreignId('plan_type_id')->constrained('plan_types');
@@ -64,22 +59,28 @@ return new class extends Migration
             $table->char('currency',3);
             $table->enum('status',['pending','completed','failed','refunded'])->default('pending');
             $table->json('metadata')->nullable();
-        
             $table->foreignId('client_account_id')->constrained('client_accounts')->restrictOnDelete();
             $table->foreignId('payer_profile_id')->constrained('profiles')->restrictOnDelete();
-        
-            $table->foreignId('payer_quotation_id')->nullable()->constrained('quotation')->restrictOnDelete();
-        
             $table->timestamps();
-        
             $table->index(['payer_profile_id','client_account_id']);
             $table->index('created_at');
-        
             $table->foreign(['payer_profile_id','client_account_id'])
                   ->references(['profile_id','client_account_id'])
                   ->on('relation_accounts')
                   ->onUpdate('cascade')
                   ->onDelete('restrict');
+        });
+
+        Schema::create('payment_leads', function (Blueprint $table) {
+            $table->id();
+            $table->string('transaction_id',100)->unique();
+            $table->decimal('amount', 18, 2);
+            $table->char('currency',3);
+            $table->enum('status',['pending','completed','failed','refunded'])->default('pending');
+            $table->json('metadata')->nullable();
+            $table->foreignId('quotation_id')->constrained('quotation')->restrictOnDelete();
+            $table->timestamps();
+
         });
       
 

@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
             $table->string('first_name', 50)->nullable();
+            $table->enum('type',['user','boss','staff']);
             $table->string('last_name', 50)->nullable();
             $table->string('type_document')->nullable();
             $table->string('dni', 50)->nullable();  // documento of identification for users it may be dni or passport number
@@ -28,7 +29,6 @@ return new class extends Migration
             $table->string('state', 50)->nullable();
             $table->date('birthdate')->nullable();
             $table->string('sex')->nullable();
-            $table->enum('type', ['owner', 'coverage_beneficiary'])->default('owner');
             $table->json('photos_dni')->nullable();
             $table->string('photo_id_type')->nullable();
             $table->string('signature_digital')->nullable();
@@ -36,33 +36,24 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::create('profile_staff', function (Blueprint $table) {
+        Schema::create('profile_boss',function(Blueprint $table){
             $table->id();
-            $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
-            $table->string('first_name', 50)->nullable();
-            $table->string('last_name', 50)->nullable();
-            $table->string('type_document')->nullable();
-            $table->string('dni', 50)->nullable();  // documento of identification for users it may be dni or passport number
-            $table->string('phone_extension', 5)->nullable();
-            $table->string('phone', 20)->nullable();
-            $table->string('nacionality')->nullable(); //country residence
-            $table->string('city')->nullable(); //country residence
-            $table->string('country')->nullable(); //country residence
-            $table->string('country_dni', 50)->nullable(); //country document nacionality
-            $table->string('state', 50)->nullable();
-            $table->date('birthdate')->nullable();
-            $table->string('sex')->nullable();
-            $table->json('photos_dni')->nullable();
-            $table->string('photo_id_type')->nullable();
-            $table->string('signature_digital')->nullable();
-            $table->integer('verified')->default(0);
-            $table->timestamps();
+            $table->foreignId('profile_id')->constrained('profiles')->onDelete('cascade');
+            $table->foreignId('organization_id')->constrained('organization')->onDelete('cascade');
         });
 
-        Schema::create('profile_boss', function (Blueprint $table) {
+        Schema::create('profile_staff',function(Blueprint $table){
             $table->id();
-            $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
+            $table->foreignId('profile_id')->constrained('profiles')->onDelete('cascade');
+            $table->foreignId('boss_id')->constarined('profile_boss')->onDelete('cascade');
+        });
+
+        Schema::create('profile_beneficiary',function(Blueprint $table){
+            $table->id();
+            $table->foreignId('profile_id')->constrained('profiles')->onDelete('cascade');
+            $table->string('sex')->nullable();
             $table->string('first_name', 50)->nullable();
+            $table->enum('type',['user','boss','staff']);
             $table->string('last_name', 50)->nullable();
             $table->string('type_document')->nullable();
             $table->string('dni', 50)->nullable();  // documento of identification for users it may be dni or passport number
@@ -70,26 +61,10 @@ return new class extends Migration
             $table->string('phone', 20)->nullable();
             $table->string('nacionality')->nullable(); //country residence
             $table->string('city')->nullable(); //country residence
-            $table->string('country')->nullable(); //country residence
-            $table->string('country_dni', 50)->nullable(); //country document nacionality
-            $table->string('state', 50)->nullable();
-            $table->date('birthdate')->nullable();
-            $table->string('sex')->nullable();
             $table->json('photos_dni')->nullable();
-            $table->string('photo_id_type')->nullable();
-            $table->string('signature_digital')->nullable();
-            $table->integer('verified')->default(0);
-            $table->timestamps();
+            $table->string('photo_beneficiary')->nullable();
+            $table->json('beneficiary_params')->nullable();
         });
-        /*
-         *
-         * photos_dni[]	photo_id_type
-         * ["dni_front.jpg", "dni_back.jpg"]	"DNI"
-         * ["passport.jpg"]	"Pasaporte"
-         * ["license_front.jpg", "license_back.jpg"]	"Licencia de conducir"
-         *
-         */
-    }
 
     /**
      * Reverse the migrations.

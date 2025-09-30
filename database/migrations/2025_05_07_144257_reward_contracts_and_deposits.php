@@ -14,7 +14,6 @@ return new class extends Migration
         Schema::create('rewards', function (Blueprint $table) {
             $table->id();
             $table->foreignId('subscriber_profile_id')->nullable()->constrained('profiles')->cascadeOnDelete();
-            $table->foreignId('lead_id')->nullable()->constrained('leads')->cascadeOnDelete();
             $table->foreignId('payment_id')->constrained('payments')->cascadeOnDelete();
             $table->foreignId('subscription_id')->nullable()->constrained('subscriptions')->cascadeOnDelete();
             $table->foreignId('fund_id')->nullable()->constrained('funds')->nullOnDelete();
@@ -28,7 +27,6 @@ return new class extends Migration
             $table->enum('status', ['accrued','pending_payment','paid','cancelled'])->default('accrued');
             $table->json('metadata')->nullable();
             $table->timestamps();
-            
             $table->unique(['subscriber_profile_id','subscription_id','fund_id','period_at','reason'], 'uniq_reward_period');
         });
  

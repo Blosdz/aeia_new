@@ -23,8 +23,6 @@ return new class extends Migration
             $table->unique(['category','name']);
         });
 
-
-
         Schema::create('funds', function (Blueprint $table) {
             $table->id();
             $table->enum('category', ['investment','coverage']);

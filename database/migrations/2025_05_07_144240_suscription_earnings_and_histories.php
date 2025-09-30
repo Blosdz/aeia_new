@@ -26,7 +26,6 @@ return new class extends Migration
             $table->decimal('current_amount', 18, 2);
             $table->json('metadata')->nullable();
             $table->timestamps();
-
             $table->unique(['subscription_id','fund_id']);
         });
 
@@ -41,16 +40,9 @@ return new class extends Migration
 
         Schema::create('subscription_participants', function (Blueprint $table) {
             $table->bigIncrements('id');
-
-            // Directo con foreignId para evitar el alter posterior
             $table->foreignId('subscription_id')->constrained('subscriptions')->cascadeOnDelete();
-
+            //si hay un profile id de staff este es el de un lead
             $table->foreignId('profile_id')->nullable()->constrained('profiles')->cascadeOnDelete();
-
-            // Si vas a permitir leads aquí (no recomendado en producción), mantenlo;
-            // si no, elimínalo y deja solo profile_id.
-            $table->foreignId('lead_id')->nullable()->constrained('leads')->cascadeOnDelete();
-
             $table->enum('role', ['owner','beneficiary','advisor'])->default('owner');
             $table->decimal('share_percent', 5, 2)->nullable();
             $table->boolean('is_primary_owner')->default(false);

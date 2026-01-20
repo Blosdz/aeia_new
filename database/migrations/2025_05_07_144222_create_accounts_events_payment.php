@@ -61,6 +61,8 @@ return new class extends Migration
             $table->json('metadata')->nullable();
             $table->foreignId('client_account_id')->constrained('client_accounts')->restrictOnDelete();
             $table->foreignId('payer_profile_id')->constrained('profiles')->restrictOnDelete();
+            // plan _id
+            $table->boolean('is_refunded')->default(false);
             $table->timestamps();
             $table->index(['payer_profile_id','client_account_id']);
             $table->index('created_at');
@@ -91,9 +93,10 @@ return new class extends Migration
      */
     public function down(): void
     {
+        Schema::dropIfExists('payment_leads');
         Schema::dropIfExists('payments');
-        Schema::dropIfExists('event_types');
+        Schema::dropIfExists('quotation');
+        Schema::dropIfExists('relation_accounts');
         Schema::dropIfExists('client_accounts');
-        Schema::dropIfExists('pay_user');
     }
 };

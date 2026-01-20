@@ -2,12 +2,20 @@
 
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
+use App\Http\Controllers\ClientController;
 
 Route::get('/', function () {
     return Inertia::render('Welcome');
 })->name('home');
 
 Route::get('dashboard', function () {
+    $user = \Illuminate\Support\Facades\Auth::user();
+    if ($user->roles()->where('name', 'admin')->exists()) {
+        return redirect()->route('admin.dashboard');
+    }
+    if ($user->roles()->where('name', 'client')->exists()) {
+        return redirect()->route('clients.dashboard');
+    }
     return Inertia::render('Dashboard');
 })->middleware(['auth', 'verified'])->name('dashboard');
 
@@ -28,6 +36,23 @@ Route::get('funds',function(){
 })->middleware(['auth','verified'])->name('funds');
 
 
+Route::middleware(['auth','verified'])->get('/dashboardClient',[ClientController::class,'index'])->name('client.dashboard');
 
-require __DIR__.'/settings.php';
+Route::get('profileClient',function(){
+    return Inertia::render('');
+})->middleware(['auth','verified'])->name('');
+Route::get('planesClient',function(){
+    return Inertia::render('');
+})->middleware(['auth','verified'])->name(''); 
+Route::get('coberturaClient',function(){
+    return Inertia::render('');
+})->middleware(['auth','verified'])->name(''); 
+Route::get('contratosClient',function(){
+    return Inertia::render('');
+})->middleware(['auth','verified'])->name(''); 
+
 require __DIR__.'/auth.php';
+require __DIR__.'/clients.php';
+require __DIR__.'/admin.php';
+require __DIR__.'/settings.php';
+require __DIR__.'/staff.php';

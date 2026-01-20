@@ -38,7 +38,10 @@ return new class extends Migration
         Schema::create('fund_histories', function (Blueprint $table) {
             $table->id();
             $table->foreignId('fund_id')->constrained('funds')->onDelete('cascade');
+            $table->decimal('previous_amount', 14, 2)->nullable();
+            $table->decimal('new_amount', 14, 2)->nullable();
             $table->decimal('fluctuation_percent', 9, 4);
+            $table->string('reason')->nullable();
             $table->timestamp('recorded_at')->useCurrent();
             $table->json('metadata')->nullable();
             $table->index(['fund_id','recorded_at']); 

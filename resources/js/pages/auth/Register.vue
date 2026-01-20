@@ -8,15 +8,40 @@ import AuthBase from '@/layouts/AuthLayout.vue';
 import { Head, useForm } from '@inertiajs/vue3';
 import { LoaderCircle } from 'lucide-vue-next';
 
+interface Props {
+    referred_by_user_id?: number | null;
+    referral_code?: string | null;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+    referred_by_user_id: null,
+    referral_code: null,
+});
+
+console.log('Register component loaded with props:', {
+    referred_by_user_id: props.referred_by_user_id,
+    referral_code: props.referral_code,
+});
+
 const form = useForm({
     name: '',
     email: '',
     password: '',
     password_confirmation: '',
+    referred_by_user_id: props.referred_by_user_id,
     rol: 2,
 });
 
+console.log('Form initialized with referred_by_user_id:', form.referred_by_user_id);
+
 const submit = () => {
+    console.log('Submitting form with data:', {
+        name: form.name,
+        email: form.email,
+        password: form.password,
+        referred_by_user_id: form.referred_by_user_id,
+        rol: form.rol,
+    });
     form.post(route('register'), {
         onFinish: () => form.reset('password', 'password_confirmation'),
     });

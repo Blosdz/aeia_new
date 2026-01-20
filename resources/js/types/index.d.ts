@@ -3,7 +3,9 @@ import type { LucideIcon } from 'lucide-vue-next';
 import type { Config } from 'ziggy-js';
 
 export interface Auth {
-    user: User;
+    user: User | null;
+    roles?: string[];
+    permissions?: string[];
 }
 
 export interface BreadcrumbItem {

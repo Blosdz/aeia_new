@@ -32,7 +32,10 @@ return new class extends Migration
         Schema::create('investment_earnings_history', function (Blueprint $table) {
             $table->bigIncrements('id');
             $table->foreignId('earning_id')->constrained('investment_earnings')->cascadeOnDelete();
-            $table->decimal('fluctuation_percent', 9, 4); // 50,4 es innecesario
+            $table->decimal('previous_amount', 18, 2)->nullable();
+            $table->decimal('new_amount', 18, 2)->nullable();
+            $table->decimal('fluctuation_percent', 9, 4);
+            $table->string('reason')->nullable();
             $table->timestamp('recorded_at')->useCurrent();
             $table->index(['earning_id','recorded_at']);
             $table->json('metadata')->nullable();
@@ -43,9 +46,12 @@ return new class extends Migration
             $table->foreignId('subscription_id')->constrained('subscriptions')->cascadeOnDelete();
             //si hay un profile id de staff este es el de un lead
             $table->foreignId('profile_id')->nullable()->constrained('profiles')->cascadeOnDelete();
+            $table->foreignId('investment_earnings_id')->constrained('investment_earnings')->cascadeOnDelete();
             $table->enum('role', ['owner','beneficiary','advisor'])->default('owner');
             $table->decimal('share_percent', 5, 2)->nullable();
+            $table->decimal('final_investment_amount', 18, 2)->default(0); // Monto final de inversión del cliente
             $table->boolean('is_primary_owner')->default(false);
+            $table->boolean('participating')->default(true);
             $table->timestamp('started_at')->useCurrent();
             $table->timestamp('ended_at')->nullable();
             $table->timestamps();

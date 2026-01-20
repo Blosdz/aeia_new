@@ -45,7 +45,7 @@ return new class extends Migration
         Schema::create('profile_staff',function(Blueprint $table){
             $table->id();
             $table->foreignId('profile_id')->constrained('profiles')->onDelete('cascade');
-            $table->foreignId('boss_id')->constarined('profile_boss')->onDelete('cascade');
+            $table->foreignId('boss_id')->constrained('profile_boss')->onDelete('cascade');
         });
 
         Schema::create('profile_beneficiary',function(Blueprint $table){
@@ -64,7 +64,12 @@ return new class extends Migration
             $table->json('photos_dni')->nullable();
             $table->string('photo_beneficiary')->nullable();
             $table->json('beneficiary_params')->nullable();
+            $table->enum('verification_status', ['pending', 'verified', 'rejected'])->default('pending')->after('phone_extension');
+            $table->text('verification_notes')->nullable()->after('verification_status');
+            $table->timestamp('verified_at')->nullable()->after('verification_notes');
+            $table->timestamps();
         });
+    }
 
     /**
      * Reverse the migrations.

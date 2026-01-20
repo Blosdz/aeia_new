@@ -26,7 +26,6 @@ class RolePermissionsTableSeeder extends Seeder
                 'edit_profiles',
                 'manage_funds',
                 'watch_reward',
-                'manage_funds',
                 'watch_contracts',
             ],
             'client' => [

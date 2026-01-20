@@ -20,9 +20,31 @@ class RegisteredUserController extends Controller
     /**
      * Show the registration page.
      */
-    public function create(): Response
+    public function create(Request $request, $referral_code = null): Response
     {
-        return Inertia::render('auth/Register');
+        $referred_by_user_id = null;
+        $validReferralCode = null;
+        
+        // Si hay un referral_code, buscamos al usuario
+        if ($referral_code) {
+            // Primero intentamos buscar por referral_code
+            $referrer = User::where('referral_code', $referral_code)->first();
+            
+            // Si no encuentra, intentamos por ID (por compatibilidad)
+            if (!$referrer && is_numeric($referral_code)) {
+                $referrer = User::find((int)$referral_code);
+            }
+            
+            if ($referrer) {
+                $referred_by_user_id = $referrer->id;
+                $validReferralCode = $referrer->referral_code;
+            }
+        }
+
+        return Inertia::render('auth/Register', [
+            'referred_by_user_id' => $referred_by_user_id,
+            'referral_code' => $validReferralCode,
+        ]);
     }
 
     /**
@@ -30,25 +52,40 @@ class RegisteredUserController extends Controller
      *
      * @throws \Illuminate\Validation\ValidationException
      */
+
+    /*default store client*/
     public function store(Request $request): RedirectResponse
     {
-        $request->validate([
+        $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
-            'rol' => 'required|integer|exists:roles,id', // valida que sea un rol válido
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'referred_by_user_id' => 'nullable|integer|exists:users,id',
         ]);
 
+        \Log::info('Register validation passed', $validated);
+
+        // Crear usuario sin referral_code primero
         $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'password' => Hash::make($validated['password']),
             'unique_code'=> Str::random(10),
+            'referral_code' => null, // Será actualizado después
+            'referred_by_user_id' => $validated['referred_by_user_id'] ?? null,
+            'referral_accepted_at' => isset($validated['referred_by_user_id']) && $validated['referred_by_user_id'] ? now() : null,
         ]);
+
+        // Generar referral_code único basado en el ID del usuario
+        $referral_code = 'REF_' . strtoupper(Str::random(6)) . '_' . $user->id;
+        $user->update(['referral_code' => $referral_code]);
+
+        \Log::info('User created with referral_code', $user->toArray());
 
         UserRole::create([
             'user_id' => $user->id,
-            'role_id' => $request->rol,
+            //rol basico de user admin y staff se crean de mi lado de backend  
+            'role_id' => 2,
         ]);
 
         event(new Registered($user));

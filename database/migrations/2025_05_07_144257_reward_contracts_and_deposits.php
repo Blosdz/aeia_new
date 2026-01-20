@@ -13,21 +13,41 @@ return new class extends Migration
     {
         Schema::create('rewards', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('subscriber_profile_id')->nullable()->constrained('profiles')->cascadeOnDelete();
-            $table->foreignId('payment_id')->constrained('payments')->cascadeOnDelete();
-            $table->foreignId('subscription_id')->nullable()->constrained('subscriptions')->cascadeOnDelete();
+            
+            // NUEVOS: Campos para cierre de proyecto
+            $table->foreignId('client_user_id')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('fund_id')->nullable()->constrained('funds')->nullOnDelete();
+            $table->foreignId('deposit_id')->nullable();
+            $table->decimal('total_investment', 15, 2)->nullable();
+            $table->decimal('total_earnings', 15, 2)->nullable();
+            $table->decimal('company_percentage', 5, 2)->nullable()->default(20);
+            $table->decimal('company_deduction', 15, 2)->nullable();
+            $table->boolean('was_referred')->default(false);
+            $table->foreignId('referrer_user_id')->nullable()->constrained('users')->nullOnDelete();
+            $table->decimal('referral_percentage', 5, 2)->nullable()->default(15);
+            $table->decimal('referral_deduction', 15, 2)->nullable()->default(0);
+            $table->decimal('net_earnings', 15, 2)->nullable();
+            
+            // ANTIGUOS: Mantener compatibilidad
+            $table->foreignId('subscriber_profile_id')->nullable()->constrained('profiles')->cascadeOnDelete();
+            $table->foreignId('payment_id')->nullable()->constrained('payments')->cascadeOnDelete();
+            $table->foreignId('subscription_id')->nullable()->constrained('subscriptions')->cascadeOnDelete();
             $table->foreignId('asesor_id')->nullable()->constrained('users')->nullOnDelete();
             $table->foreignId('earning_history_id')->nullable()->constrained('investment_earnings_history')->nullOnDelete();
             $table->enum('reason', ['performance_return','closure','referral'])->default('performance_return');
             $table->decimal('percentage', 5, 2)->nullable();
-            $table->decimal('amount', 18, 2);
-            $table->char('currency', 3);
-            $table->date('period_at');
-            $table->enum('status', ['accrued','pending_payment','paid','cancelled'])->default('accrued');
+            $table->decimal('amount', 18, 2)->nullable();
+            $table->char('currency', 3)->nullable();
+            $table->date('period_at')->nullable();
+            $table->enum('status', ['accrued','pending_payment','paid','cancelled','closed'])->default('accrued');
+            $table->timestamp('closed_at')->nullable();
+            $table->timestamp('paid_at')->nullable();
             $table->json('metadata')->nullable();
             $table->timestamps();
-            $table->unique(['subscriber_profile_id','subscription_id','fund_id','period_at','reason'], 'uniq_reward_period');
+            
+            $table->index('client_user_id');
+            $table->index('fund_id');
+            $table->index(['subscriber_profile_id','subscription_id','fund_id','period_at','reason']);
         });
  
         Schema::create('contracts', function (Blueprint $table) {

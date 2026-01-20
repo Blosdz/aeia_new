@@ -36,7 +36,7 @@ return new class extends Migration
         Schema::create('leads',function(Blueprint $table){
             $table->id();
             $table->string('name');
-            $table->foreignId('user_id')->constrained->('users')->onDelete('cascade');
+            $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
             $table->string('lastname');
             $table->string('email')->nullable();
             $table->string('url_payment')->nullable();
@@ -55,12 +55,12 @@ return new class extends Migration
             $table->integer('last_activity')->index();
         });
 
-        Schemma::create('organization',function(Blueprint $table){
+        Schema::create('organization',function(Blueprint $table){
             $table->id();
             $table->string('name')->nullable();
             $table->string('uuid')->unique();
             $table->timestamps();
-        }
+        });
 
 
     }

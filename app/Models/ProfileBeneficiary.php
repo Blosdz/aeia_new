@@ -46,6 +46,14 @@ class ProfileBeneficiary extends Model
     }
 
     /**
+     * Obtener todas las suscripciones asociadas a este beneficiario
+     */
+    public function subscriptions()
+    {
+        return $this->hasMany(Subscription::class, 'beneficiary_id');
+    }
+
+    /**
      * Obtener el nombre completo del beneficiario
      */
     public function getFullNameAttribute(): string

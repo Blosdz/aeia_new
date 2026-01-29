@@ -11,6 +11,8 @@ class Subscription extends Model
 
     protected $fillable = [
         'payment_id',
+        'profile_id',
+        'beneficiary_id',
         'plan_type_id',
         'unique_code',
         'started_at',
@@ -39,9 +41,49 @@ class Subscription extends Model
         return $this->belongsTo(Payment::class);
     }
 
+    public function profile()
+    {
+        return $this->belongsTo(Profile::class, 'profile_id');
+    }
+
+    public function beneficiary()
+    {
+        return $this->belongsTo(ProfileBeneficiary::class, 'beneficiary_id');
+    }
+
     public function planType()
     {
         return $this->belongsTo(Plans::class, 'plan_type_id');
+    }
+
+    /**
+     * Obtener el perfil o beneficiario asociado a esta suscripción
+     * Retorna el beneficiario si existe, sino el perfil
+     */
+    public function getSubscriberAttribute()
+    {
+        if ($this->beneficiary_id) {
+            return $this->beneficiary;
+        }
+        return $this->profile;
+    }
+
+    /**
+     * Obtener el nombre completo del suscriptor
+     */
+    public function getSubscriberNameAttribute(): string
+    {
+        $subscriber = $this->subscriber;
+        if (!$subscriber) {
+            return 'Sin asignar';
+        }
+
+        if ($subscriber instanceof ProfileBeneficiary) {
+            return $subscriber->full_name;
+        }
+
+        // Es un Profile
+        return $subscriber->user->full_name ?? $subscriber->user->name ?? 'Usuario';
     }
 
     public function investmentEarnings()

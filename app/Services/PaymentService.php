@@ -113,6 +113,7 @@ class PaymentService
     /**
      * Crear un fondo con pagos específicos y crear estructura completa
      * para cada participante (subscription_participant, investment_earnings, etc.)
+     * Incluye la creación de la subscription del admin para el 20% de ganancias
      */
     public function createFund(string $category, string $name, array $paymentIds, ?string $description = null): Fund
     {
@@ -236,6 +237,73 @@ class PaymentService
                 ]);
             }
 
+            // Crear estructura para el ADMIN (20% de futuras ganancias)
+            $adminProfile = \App\Models\Profile::where('user_id', 1)->first(); // Admin AEIA
+            
+            if ($adminProfile) {
+                // Obtener o crear plan type para comisiones del admin
+                $adminPlanType = \App\Models\Plans::firstOrCreate(
+                    ['category' => 'investment', 'name' => 'Admin Commission'],
+                    ['amount_min' => 0, 'amount_max' => 0, 'periodicity' => 'monthly']
+                );
+
+                // Crear subscription especial para el admin (sin payment asociado)
+                $adminSubscription = Subscription::create([
+                    'payment_id' => null,
+                    'profile_id' => $adminProfile->id,
+                    'plan_type_id' => $adminPlanType->id,
+                    'started_at' => now(),
+                ]);
+
+                // Crear InvestmentEarning para el admin (comienza en 0)
+                $adminEarning = InvestmentEarning::create([
+                    'subscription_id' => $adminSubscription->id,
+                    'fund_id' => $fund->id,
+                    'initial_amount' => 0,
+                    'current_amount' => 0,
+                    'metadata' => [
+                        'type' => 'admin_commission',
+                        'commission_rate' => 20,
+                        'note' => 'Admin receives 20% of fund profits',
+                    ]
+                ]);
+
+                // Crear SubscriptionParticipant para el admin
+                SubscriptionParticipant::create([
+                    'subscription_id' => $adminSubscription->id,
+                    'profile_id' => $adminProfile->id,
+                    'investment_earnings_id' => $adminEarning->id,
+                    'role' => 'advisor',
+                    'share_percent' => 20,
+                    'final_investment_amount' => 0,
+                    'is_primary_owner' => false,
+                    'participating' => true,
+                    'started_at' => now(),
+                ]);
+
+                // Registrar en historial de earnings del admin
+                InvestmentEarningHistory::create([
+                    'earning_id' => $adminEarning->id,
+                    'previous_amount' => 0,
+                    'new_amount' => 0,
+                    'fluctuation_percent' => 0,
+                    'reason' => 'admin_commission_setup',
+                    'recorded_at' => now(),
+                    'metadata' => [
+                        'event' => 'admin_commission_setup',
+                        'fund_id' => $fund->id,
+                        'fund_name' => $fund->name,
+                        'commission_rate' => 20,
+                    ]
+                ]);
+
+                \Log::info("Admin commission structure created for fund", [
+                    'fund_id' => $fund->id,
+                    'admin_subscription_id' => $adminSubscription->id,
+                    'admin_earning_id' => $adminEarning->id,
+                ]);
+            }
+
             return $fund;
         });
     }
@@ -244,76 +312,177 @@ class PaymentService
      * Asignar pagos validados a un fondo
      */
     public function allocatePaymentsToFund(Fund $fund, array $paymentIds, ?array $allocation = null): void
+    {Implementa distribución 80/20:
+     * - 80% de las ganancias se distribuyen proporcionalmente entre clientes
+     * - 20% de las ganancias van al admin
+     * - Las pérdidas las absorben 100% los clientes (admin no pierde)
+     */
+    public function updateFundValue(Fund $fund, float $newAmount, ?string $reason = null, ?int $adminProfileId = null): void
     {
-        DB::transaction(function () use ($fund, $paymentIds, $allocation) {
-            $payments = Payment::whereIn('id', $paymentIds)->where('status', 'completed')->get();
+        DB::transaction(function () use ($fund, $newAmount, $reason, $adminProfileId) {
+            $oldFundAmount = $fund->current_amount;
+            $initialFundAmount = $fund->initial_amount;
+            
+            // Calcular ganancia/pérdida total desde el inicio
+            $totalProfit = $newAmount - $initialFundAmount;
+            
+            // Determinar si hay ganancia o pérdida
+            $hasProfit = $totalProfit > 0;
+            
+            // Calcular distribución 80/20 solo si hay ganancia
+            $adminProfit = $hasProfit ? $totalProfit * 0.20 : 0;
+            $clientsProfit = $hasProfit ? $totalProfit * 0.80 : $totalProfit; // Si hay pérdida, va 100% a clientes
+            
+            // Calcular fluctuación porcentual desde última actualización
+            $fluctuation = $newAmount - $oldFundAmount;
+            $fluctuationPercent = $oldFundAmount > 0 ? ($fluctuation / $oldFundAmount) * 100 : 0;
 
-            foreach ($payments as $payment) {
-                // Verificar que el pago tiene suscripción
-                if (!$payment->subscription) {
-                    $this->validatePayment($payment);
-                }
+            // Actualizar fondo
+            $fund->update(['current_amount' => $newAmount]);
 
-                $subscription = $payment->subscription;
+            // Registrar en historial del fondo
+            FundHistory::create([
+                'fund_id' => $fund->id,
+                'previous_amount' => $oldFundAmount,
+                'new_amount' => $newAmount,
+                'fluctuation_percent' => $fluctuationPercent,
+                'reason' => $reason,
+                'recorded_at' => now(),
+                'metadata' => [
+                    'event' => 'value_update',
+                    'fluctuation' => $fluctuation,
+                    'total_profit' => $totalProfit,
+                    'admin_profit' => $adminProfit,
+                    'clients_profit' => $clientsProfit,
+                    'has_profit' => $hasProfit,
+                    'admin_profile_id' => $adminProfileId,
+                ]
+            ]);
 
-                // Crear InvestmentEarning para esta suscripción en este fondo
-                $earning = InvestmentEarning::firstOrCreate(
-                    [
-                        'subscription_id' => $subscription->id,
-                        'fund_id' => $fund->id,
-                    ],
-                    [
-                        'initial_amount' => $payment->amount,
-                        'current_amount' => $payment->amount,
+            // Obtener todas las earnings (clientes + admin)
+            $earnings = $fund->investmentEarnings()->get();
+            
+            if ($earnings->isEmpty()) {
+                \Log::warning("No hay investment earnings para el fondo {$fund->id}");
+                return;
+            }
+
+            // Separar earnings de clientes y admin
+            $clientEarnings = $earnings->filter(function ($earning) {
+                return floatval($earning->initial_amount) > 0; // Clientes tienen initial_amount > 0
+            });
+            
+            $adminEarning = $earnings->filter(function ($earning) {
+                return floatval($earning->initial_amount) === 0.0; // Admin tiene initial_amount = 0
+            })->first();
+
+            // Actualizar earnings de CLIENTES (80% de ganancias o 100% de pérdidas)
+            $totalClientInitial = $clientEarnings->sum('initial_amount');
+            
+            foreach ($clientEarnings as $earning) {
+                // Calcular proporción del cliente en el fondo
+                $proportion = $totalClientInitial > 0 
+                    ? floatval($earning->initial_amount) / floatval($totalClientInitial) 
+                    : 0;
+                
+                // Nuevo monto = inversión inicial + (ganancia/pérdida de clientes * proporción)
+                $clientShare = $clientsProfit * $proportion;
+                $newEarningAmount = floatval($earning->initial_amount) + $clientShare;
+                $oldEarningAmount = $earning->current_amount;
+                
+                $earning->update(['current_amount' => $newEarningAmount]);
+
+                // Calcular fluctuación del earning
+                $earningFluctuation = $oldEarningAmount > 0 
+                    ? (($newEarningAmount - $oldEarningAmount) / $oldEarningAmount) * 100 
+                    : 0;
+                
+                // ROI total del cliente
+                $roiTotal = $earning->initial_amount > 0 
+                    ? (($newEarningAmount - $earning->initial_amount) / $earning->initial_amount) * 100 
+                    : 0;
+                
+                InvestmentEarningHistory::create([
+                    'earning_id' => $earning->id,
+                    'previous_amount' => $oldEarningAmount,
+                    'new_amount' => $newEarningAmount,
+                    'fluctuation_percent' => $earningFluctuation,
+                    'reason' => $reason,
+                    'recorded_at' => now(),
+                    'metadata' => [
+                        'event' => 'fund_value_update',
+                        'fund_fluctuation_percent' => $fluctuationPercent,
+                        'client_share' => $clientShare,
+                        'proportion' => $proportion * 100,
+                        'roi_total' => $roiTotal,
+                        'distribution_type' => $hasProfit ? '80% of profit' : '100% of loss',
                     ]
-                );
+                ]);
 
-                // Si es la primera vez, incrementar el current_amount del fondo
-                if ($earning->wasRecentlyCreated) {
-                    $fund->update([
-                        'current_amount' => $fund->current_amount + $payment->amount
+                // Actualizar SubscriptionParticipants asociados
+                $participants = SubscriptionParticipant::where('investment_earnings_id', $earning->id)->get();
+                foreach ($participants as $participant) {
+                    $participant->update([
+                        'final_investment_amount' => $newEarningAmount
+                    ]);
+                }
+            }
+
+            // Actualizar earning del ADMIN (20% de ganancias, 0 si hay pérdida)
+            if ($adminEarning) {
+                $oldAdminAmount = $adminEarning->current_amount;
+                $newAdminAmount = $adminProfit; // Comisión acumulada total
+                
+                $adminEarning->update(['current_amount' => $newAdminAmount]);
+
+                // Calcular fluctuación del admin
+                $adminFluctuation = $oldAdminAmount > 0 
+                    ? (($newAdminAmount - $oldAdminAmount) / $oldAdminAmount) * 100 
+                    : 0;
+
+                InvestmentEarningHistory::create([
+                    'earning_id' => $adminEarning->id,
+                    'previous_amount' => $oldAdminAmount,
+                    'new_amount' => $newAdminAmount,
+                    'fluctuation_percent' => $adminFluctuation,
+                    'reason' => $reason,
+                    'recorded_at' => now(),
+                    'metadata' => [
+                        'event' => 'admin_commission_update',
+                        'fund_fluctuation_percent' => $fluctuationPercent,
+                        'total_fund_profit' => $totalProfit,
+                        'admin_commission_rate' => 20,
+                        'commission_earned' => $newAdminAmount - $oldAdminAmount,
+                        'has_profit' => $hasProfit,
+                    ]
+                ]);
+
+                // Actualizar SubscriptionParticipant del admin
+                $adminParticipant = SubscriptionParticipant::where('investment_earnings_id', $adminEarning->id)->first();
+                if ($adminParticipant) {
+                    $adminParticipant->update([
+                        'final_investment_amount' => $newAdminAmount
                     ]);
                 }
 
-                // Crear asignación de pago
-                PaymentAllocation::create([
-                    'payment_id' => $payment->id,
-                    'subscription_id' => $subscription->id,
+                \Log::info("Admin commission updated", [
                     'fund_id' => $fund->id,
-                    'amount' => $payment->amount,
-                    'status' => 'accrued',
-                    'metadata' => $allocation ?? [],
+                    'old_amount' => $oldAdminAmount,
+                    'new_amount' => $newAdminAmount,
+                    'commission_earned' => $newAdminAmount - $oldAdminAmount,
                 ]);
-
-                // Registrar en historial de earnings
-                InvestmentEarningHistory::create([
-                    'earning_id' => $earning->id,
-                    'previous_amount' => 0,
-                    'new_amount' => floatval($payment->amount),
-                    'fluctuation_percent' => 0,
-                    'reason' => 'initial_allocation',
-                    'recorded_at' => now(),
-                    'metadata' => ['event' => 'initial_allocation', 'amount' => $payment->amount]
-                ]);
+            } else {
+                \Log::warning("No se encontró investment earning del admin para el fondo {$fund->id}");
             }
 
-            // Registrar cambio en fondo
-            $fundFluctuation = (($fund->current_amount - $fund->initial_amount) / $fund->initial_amount) * 100;
-            FundHistory::create([
+            \Log::info("Fund value updated with 80/20 distribution", [
                 'fund_id' => $fund->id,
-                'fluctuation_percent' => $fundFluctuation,
-                'recorded_at' => now(),
-                'metadata' => ['event' => 'payments_allocated', 'payment_count' => count($paymentIds)]
+                'new_amount' => $newAmount,
+                'total_profit' => $totalProfit,
+                'admin_profit' => $adminProfit,
+                'clients_profit' => $clientsProfit,
+                'has_profit' => $hasProfit,
             ]);
-        });
-    }
-
-    /**
-     * Actualizar valor actual del fondo y registrar fluctuación
-     * 
-     * Ejemplo: Si recaudé 500 y se reporta 521, la fluctuación es +21 (+4.2%)
-     * También crea una Subscription para el admin que registra la actualización
-     */
     public function updateFundValue(Fund $fund, float $newAmount, ?string $reason = null, ?int $adminProfileId = null): void
     {
         DB::transaction(function () use ($fund, $newAmount, $reason, $adminProfileId) {

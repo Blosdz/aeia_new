@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 class ProfileStaff extends Model
 {
     protected $table = 'profile_staff';
+    
+    public $timestamps = false;
 
     protected $fillable = [
         'profile_id',

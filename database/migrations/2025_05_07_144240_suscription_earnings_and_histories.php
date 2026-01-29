@@ -11,6 +11,8 @@ return new class extends Migration
         Schema::create('subscriptions', function (Blueprint $table) {
             $table->id();
             $table->foreignId('payment_id')->constrained('payments')->cascadeOnDelete();
+            $table->foreignId('profile_id')->constrained('profiles')->cascadeOnDelete()->nullable();
+            $table->foreignId('beneficiary_id')->constrained('profile_beneficiary')->cascadeOnDelete()->nullable();
             $table->foreignId('plan_type_id')->constrained('plan_types');
             $table->string('unique_code',50)->nullable()->unique();
             $table->timestamp('started_at')->useCurrent();

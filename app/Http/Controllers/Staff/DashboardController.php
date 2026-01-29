@@ -8,6 +8,8 @@ use App\Models\Profile;
 use App\Models\ReferralCommission;
 use App\Models\Subscription;
 use App\Models\Payment;
+use App\Models\InvestmentEarning;
+use App\Models\InvestmentEarningHistory;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
@@ -93,6 +95,9 @@ class DashboardController extends Controller
 
         // 5. Gráfico de comisiones por mes
         $commissionsChart = $this->getCommissionsChart($commissions);
+        
+    // Gráfico de ganancias de clientes referidos
+    $referralsEarningsChart = $this->getReferralsEarningsChart($referredUsers);
 
         // 7. Detalles de referidos
         $referralsDetail = $referredUsers->count() > 0
@@ -129,6 +134,7 @@ class DashboardController extends Controller
             'charts' => [
                 'conversion' => $conversionChart,
                 'commissions' => $commissionsChart,
+                            'referrals_earnings' => $referralsEarningsChart,
             ],
             'latest_commissions' => $latestCommissions,
             'referrals' => $referralsDetail,
@@ -289,5 +295,66 @@ class DashboardController extends Controller
         return Inertia::render('Staff/Referrals/Index', [
             'referrals' => $referralsData,
         ]);
+    }
+    /**
+     * Gráfico de ganancias acumuladas de clientes referidos
+     */
+    private function getReferralsEarningsChart($referredUsers)
+    {
+        $data = [];
+        $thirtyDaysAgo = now()->subDays(30);
+        
+        // Obtener IDs de perfiles de referidos
+        $referredProfileIds = $referredUsers->map(fn($u) => $u->profile?->id)->filter();
+        
+        if ($referredProfileIds->isEmpty()) {
+            for ($i = 29; $i >= 0; $i--) {
+                $dateLabel = now()->subDays($i)->format('d/m');
+                $data[] = [
+                    'date' => $dateLabel,
+                    'earnings' => 0,
+                    'cumulative_earnings' => 0,
+                ];
+            }
+            return $data;
+        }
+        
+        // Obtener suscripciones de referidos
+        $subscriptionIds = Subscription::whereIn('profile_id', $referredProfileIds)
+            ->pluck('id');
+        
+        // Obtener historial de ganancias
+        $earningsHistory = InvestmentEarningHistory::whereHas('investmentEarning', function ($query) use ($subscriptionIds) {
+                $query->whereIn('subscription_id', $subscriptionIds);
+            })
+            ->where('recorded_at', '>=', $thirtyDaysAgo)
+            ->orderBy('recorded_at')
+            ->get();
+        
+        $cumulativeEarnings = 0;
+        
+        for ($i = 29; $i >= 0; $i--) {
+            $date = now()->subDays($i)->format('Y-m-d');
+            $dateLabel = now()->subDays($i)->format('d/m');
+            
+            // Obtener cambios del día
+            $dayHistory = $earningsHistory->filter(function ($history) use ($date) {
+                return $history->recorded_at->format('Y-m-d') === $date;
+            });
+            
+            $dayEarnings = $dayHistory->sum(function ($history) {
+                return ($history->new_amount ?? 0) - ($history->previous_amount ?? 0);
+            });
+            
+            $cumulativeEarnings += $dayEarnings;
+            
+            $data[] = [
+                'date' => $dateLabel,
+                'earnings' => round($dayEarnings, 2),
+                'cumulative_earnings' => round($cumulativeEarnings, 2),
+            ];
+        }
+
+        return $data;
     }
 }

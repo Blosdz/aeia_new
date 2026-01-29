@@ -5,6 +5,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Users, DollarSign, CreditCard, TrendingUp, Activity, Award, ArrowRight } from 'lucide-vue-next';
+import { onMounted, onBeforeUnmount, ref, watch } from 'vue';
+import { Chart, registerables, type ChartData, type ChartOptions } from 'chart.js';
+Chart.register(...registerables);
 import type { BreadcrumbItem } from '@/types';
 
 interface Stats {
@@ -41,13 +44,23 @@ interface RevenueByDay {
   total: number;
 }
 
+interface EarningsPoint {
+  date: string;
+  gains: number;
+  daily_gains: number;
+}
+
 const props = defineProps<{
   stats: Stats;
   recent_payments: RecentPayment[];
   top_plans: TopPlan[];
   users_by_role: Record<string, number>;
   revenue_by_day: RevenueByDay[];
+  earnings_chart: EarningsPoint[];
 }>();
+
+const earningsChartRef = ref<HTMLCanvasElement | null>(null);
+const earningsChartInstance = ref<Chart | null>(null);
 
 const breadcrumbs: BreadcrumbItem[] = [
   { title: 'Admin', href: '#' },
@@ -81,9 +94,91 @@ const getStatusBadge = (status: string) => {
   };
   return statusMap[status as keyof typeof statusMap] || { label: status, variant: 'secondary' as const };
 };
+
+const buildEarningsChart = () => {
+  if (!earningsChartRef.value) return;
+
+  const labels = props.earnings_chart.map(point => point.date);
+  const gains = props.earnings_chart.map(point => point.gains ?? 0);
+  const daily = props.earnings_chart.map(point => point.daily_gains ?? 0);
+
+  const data: ChartData<'line'> = {
+    labels,
+    datasets: [
+      {
+        label: 'Ganancia acumulada',
+        data: gains,
+        borderColor: '#2563eb',
+        backgroundColor: 'rgba(37, 99, 235, 0.15)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+      },
+      {
+        label: 'Ganancia diaria',
+        data: daily,
+        borderColor: '#16a34a',
+        backgroundColor: 'rgba(22, 163, 74, 0.15)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+      },
+    ],
+  };
+
+  const options: ChartOptions<'line'> = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        labels: {
+          color: '#0f172a',
+          boxHeight: 8,
+        },
+      },
+      tooltip: {
+        mode: 'index',
+        intersect: false,
+      },
+    },
+    scales: {
+      x: {
+        ticks: {
+          color: '#475569',
+          maxTicksLimit: 10,
+        },
+        grid: { display: false },
+      },
+      y: {
+        ticks: {
+          color: '#475569',
+          callback: (val) => `$${val}`,
+        },
+        grid: { color: 'rgba(148, 163, 184, 0.25)' },
+      },
+    },
+  };
+
+  if (earningsChartInstance.value) {
+    earningsChartInstance.value.destroy();
+  }
+
+  if (!earningsChartRef.value) return;
+
+  earningsChartInstance.value = new Chart(earningsChartRef.value, {
+    type: 'line',
+    data,
+    options,
+  });
+};
+
+onMounted(buildEarningsChart);
+watch(() => props.earnings_chart, buildEarningsChart, { deep: true });
+onBeforeUnmount(() => earningsChartInstance.value?.destroy());
 </script>
 
 <template>
+
   <Head title="Admin Dashboard" />
 
   <AppLayout :breadcrumbs="breadcrumbs">
@@ -105,7 +200,7 @@ const getStatusBadge = (status: string) => {
       <!-- Estadísticas principales -->
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <!-- Total de usuarios -->
-        <Card>
+        <Card class="border-l-4 border-l-blue-500">
           <CardContent class="pt-6">
             <div class="flex items-start justify-between">
               <div>
@@ -119,13 +214,14 @@ const getStatusBadge = (status: string) => {
         </Card>
 
         <!-- Total de pagos -->
-        <Card>
+        <Card class="border-l-4 border-l-purple-500">
           <CardContent class="pt-6">
             <div class="flex items-start justify-between">
               <div>
                 <p class="text-sm text-muted-foreground mb-1">Total de Pagos</p>
                 <p class="text-2xl font-bold">{{ stats.total_payments }}</p>
-                <p class="text-xs text-green-600 dark:text-green-400 mt-1">{{ stats.completed_payments }} completados</p>
+                <p class="text-xs text-green-600 dark:text-green-400 mt-1">{{ stats.completed_payments }} completados
+                </p>
               </div>
               <CreditCard class="h-8 w-8 text-purple-500 opacity-20" />
             </div>
@@ -133,7 +229,7 @@ const getStatusBadge = (status: string) => {
         </Card>
 
         <!-- Ingresos totales -->
-        <Card>
+        <Card class="border-l-4 border-l-green-500">
           <CardContent class="pt-6">
             <div class="flex items-start justify-between">
               <div>
@@ -147,7 +243,7 @@ const getStatusBadge = (status: string) => {
         </Card>
 
         <!-- Total invertido -->
-        <Card>
+        <Card class="border-l-4 border-l-orange-500">
           <CardContent class="pt-6">
             <div class="flex items-start justify-between">
               <div>
@@ -160,6 +256,22 @@ const getStatusBadge = (status: string) => {
           </CardContent>
         </Card>
       </div>
+
+      <!-- Gráfico de ganancias -->
+      <Card>
+        <CardHeader class="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Ganancias últimos 30 días</CardTitle>
+            <CardDescription>Evolución acumulada y diaria</CardDescription>
+          </div>
+          <Award class="h-5 w-5 text-blue-500" />
+        </CardHeader>
+        <CardContent>
+          <div class="h-72">
+            <canvas ref="earningsChartRef"></canvas>
+          </div>
+        </CardContent>
+      </Card>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Pagos recientes (columna izquierda y central) -->
@@ -180,7 +292,8 @@ const getStatusBadge = (status: string) => {
             </CardHeader>
             <CardContent>
               <div class="space-y-4">
-                <div v-for="payment in recent_payments" :key="payment.id" class="flex items-start justify-between pb-4 border-b last:border-0">
+                <div v-for="payment in recent_payments" :key="payment.id"
+                  class="flex items-start justify-between pb-4 border-b last:border-0">
                   <div class="flex-1">
                     <div class="flex items-center gap-2 mb-1">
                       <p class="font-semibold">{{ payment.user }}</p>
@@ -208,10 +321,12 @@ const getStatusBadge = (status: string) => {
             </CardHeader>
             <CardContent>
               <div class="space-y-4">
-                <div v-for="plan in top_plans" :key="plan.id" class="flex items-start justify-between pb-4 border-b last:border-0">
+                <div v-for="plan in top_plans" :key="plan.id"
+                  class="flex items-start justify-between pb-4 border-b last:border-0">
                   <div>
                     <p class="font-semibold">{{ plan.name }}</p>
-                    <p class="text-xs text-muted-foreground">Rango: {{ formatCurrency(plan.amount_min) }} - {{ formatCurrency(plan.amount_max) }}</p>
+                    <p class="text-xs text-muted-foreground">Rango: {{ formatCurrency(plan.amount_min) }} - {{
+                      formatCurrency(plan.amount_max) }}</p>
                   </div>
                   <div class="text-right">
                     <Badge variant="secondary">{{ plan.subscriptions_count }} suscripciones</Badge>
@@ -268,7 +383,8 @@ const getStatusBadge = (status: string) => {
           </Card>
 
           <!-- Resumen rápido -->
-          <Card class="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950 border-blue-200 dark:border-blue-800">
+          <Card
+            class="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950 border-blue-200 dark:border-blue-800">
             <CardHeader>
               <CardTitle class="text-lg">Resumen</CardTitle>
             </CardHeader>
@@ -279,11 +395,13 @@ const getStatusBadge = (status: string) => {
               </div>
               <div class="flex justify-between">
                 <span class="text-muted-foreground">Tasa de conversión:</span>
-                <span class="font-semibold">{{ stats.total_users > 0 ? ((stats.total_payments / stats.total_users) * 100).toFixed(1) : 0 }}%</span>
+                <span class="font-semibold">{{ stats.total_users > 0 ? ((stats.total_payments / stats.total_users) *
+                  100).toFixed(1) : 0 }}%</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-muted-foreground">Pago promedio:</span>
-                <span class="font-semibold">{{ stats.total_payments > 0 ? formatCurrency(stats.total_revenue / stats.total_payments) : formatCurrency(0) }}</span>
+                <span class="font-semibold">{{ stats.total_payments > 0 ? formatCurrency(stats.total_revenue /
+                  stats.total_payments) : formatCurrency(0) }}</span>
               </div>
             </CardContent>
           </Card>

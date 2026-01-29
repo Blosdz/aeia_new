@@ -36,16 +36,25 @@ class CoverageController extends Controller
             $query->where('payer_profile_id', $profile->id);
         })->whereHas('planType', function ($query) {
             $query->where('category', 'coverage');
-        })->with('planType', 'payment')
+        })->with('planType', 'payment', 'beneficiary')
             ->orderByDesc('created_at')
             ->paginate(15);
 
         // Agregar información de precio pagado a cada cobertura
         $coverages->getCollection()->transform(function ($coverage) {
+            // Obtener metadata para información adicional
             $metadata = json_decode($coverage->payment->metadata, true);
             $coverage->price_per_beneficiary = $metadata['price_per_beneficiary'] ?? $coverage->planType->amount_min;
-            $coverage->beneficiaries_count = $metadata['beneficiaries_count'] ?? 1;
+
+            // Contar beneficiarios desde las suscripciones del mismo payment
+            $coverage->beneficiaries_count = Subscription::where('payment_id', $coverage->payment_id)->count();
             $coverage->total_paid = $coverage->payment->amount;
+
+            // Agregar información del beneficiario si existe
+            if ($coverage->beneficiary) {
+                $coverage->beneficiary_name = $coverage->beneficiary->full_name;
+            }
+
             return $coverage;
         });
 
@@ -162,15 +171,6 @@ class CoverageController extends Controller
                     'type' => 'coverage',
                     'beneficiaries_count' => $beneficiaries->count(),
                     'price_per_beneficiary' => $pricePerBeneficiary,
-                    'beneficiary_ids' => $beneficiaries->pluck('id')->toArray(),
-                    'beneficiaries' => $beneficiaries->map(function ($b) {
-                        return [
-                            'id' => $b->id,
-                            'name' => $b->first_name . ' ' . $b->last_name,
-                            'dni' => $b->dni,
-                            'relationship' => $b->relationship ?? null,
-                        ];
-                    })->toArray(),
                 ]),
             ]);
 
@@ -178,6 +178,8 @@ class CoverageController extends Controller
             foreach ($beneficiaries as $beneficiary) {
                 Subscription::create([
                     'payment_id' => $payment->id,
+                    'profile_id' => $profile->id, // El perfil del usuario que está pagando
+                    'beneficiary_id' => $beneficiary->id, // El beneficiario de la cobertura
                     'plan_type_id' => $plan->id,
                     'started_at' => now(),
                     'expires_at' => $plan->periodicity === 'annual' ? now()->addYear() : now()->addMonth(),
@@ -230,13 +232,28 @@ class CoverageController extends Controller
             abort(403);
         }
 
-        // Agregar información de precio pagado
-        $coverage->load('planType', 'payment');
+        // Agregar información de precio pagado y beneficiarios
+        $coverage->load('planType', 'payment', 'beneficiary');
         $metadata = json_decode($coverage->payment->metadata, true);
         $coverage->price_per_beneficiary = $metadata['price_per_beneficiary'] ?? $coverage->planType->amount_min;
-        $coverage->beneficiaries_count = $metadata['beneficiaries_count'] ?? 1;
         $coverage->total_paid = $coverage->payment->amount;
-        $coverage->beneficiaries = $metadata['beneficiaries'] ?? [];
+
+        // Obtener todos los beneficiarios asociados a este payment
+        $allSubscriptions = Subscription::where('payment_id', $coverage->payment_id)
+            ->with('beneficiary')
+            ->get();
+
+        $coverage->beneficiaries_count = $allSubscriptions->count();
+        $coverage->beneficiaries = $allSubscriptions->map(function ($sub) {
+            return [
+                'id' => $sub->beneficiary->id,
+                'name' => $sub->beneficiary->full_name,
+                'dni' => $sub->beneficiary->dni,
+                'type_document' => $sub->beneficiary->type_document,
+                'phone' => $sub->beneficiary->phone_extension . ' ' . $sub->beneficiary->phone,
+                'verification_status' => $sub->beneficiary->verification_status,
+            ];
+        })->toArray();
 
         return Inertia::render('Client/Coverage/Show', [
             'coverage' => $coverage,

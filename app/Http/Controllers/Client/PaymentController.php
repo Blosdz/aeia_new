@@ -221,9 +221,10 @@ class PaymentController extends Controller
             'metadata' => $metadata, // Incluye membership_applied: 25.00 si aplica
         ]);
 
-        // Crear subscripción
+        // Crear subscripción asociada al perfil del usuario
         Subscription::create([
             'payment_id' => $payment->id,
+            'profile_id' => $profile->id,
             'plan_type_id' => $validated['plan_type_id'],
             'unique_code' => 'SUB_' . time() . '_' . uniqid(),
             'started_at' => now(),

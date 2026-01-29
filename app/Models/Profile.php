@@ -105,6 +105,11 @@ class Profile extends Model
         return $this->hasMany(ProfileBeneficiary::class);
     }
 
+    public function subscriptions()
+    {
+        return $this->hasMany(Subscription::class, 'profile_id');
+    }
+
     public function referralCommissions()
     {
         return $this->hasMany(ReferralCommission::class, 'advisor_profile_id');

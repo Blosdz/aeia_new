@@ -13,6 +13,12 @@ Route::get('dashboard', function () {
     if ($user->roles()->where('name', 'admin')->exists()) {
         return redirect()->route('admin.dashboard');
     }
+    if ($user->roles()->where('name', 'support')->exists()) {
+        return redirect()->route('support.dashboard');
+    }
+    if ($user->roles()->where('name', 'staff')->exists()) {
+        return redirect()->route('staff.dashboard');
+    }
     if ($user->roles()->where('name', 'client')->exists()) {
         return redirect()->route('clients.dashboard');
     }
@@ -56,3 +62,4 @@ require __DIR__.'/clients.php';
 require __DIR__.'/admin.php';
 require __DIR__.'/settings.php';
 require __DIR__.'/staff.php';
+require __DIR__.'/support.php';
